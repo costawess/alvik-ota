@@ -5,6 +5,9 @@ import sys
 import network
 from math import atan2, sqrt
 from umqtt.simple import MQTTClient
+import ntptime
+
+
 
 # ------------------- CONFIGURAÇÃO MQTT -------------------
 MQTT_BROKER = "192.168.2.14"  # IP do Broker MQTT
@@ -20,6 +23,13 @@ def connect_wifi():
         print("Conectando ao Wi-Fi...")
         sleep_ms(500)
     print("✅ Conectado ao Wi-Fi:", wlan.ifconfig())
+
+    # Sincronizar o relógio com o servidor NTP
+    try:
+        ntptime.settime()
+        print("✅ Relógio sincronizado com o servidor NTP")
+    except Exception as e:
+        print("⚠ Erro ao sincronizar o relógio com o servidor NTP:", e)
 
 # ------------------- CONEXÃO MQTT -------------------
 def connect_mqtt():
