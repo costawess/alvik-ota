@@ -5,7 +5,7 @@ import network
 from umqtt.simple import MQTTClient
 
 # ------------------- CONFIGURAÇÃO MQTT -------------------
-MQTT_BROKER = "192.168.1.100"  # Substitua pelo endereço do seu broker MQTT
+MQTT_BROKER = " 192.168.2.14"  # Substitua pelo endereço do seu broker MQTT
 MQTT_TOPIC = "alvik/sensors"
 MQTT_CLIENT_ID = "Alvik_Robot"
 
