@@ -27,6 +27,11 @@ def connect_wifi():
     # Sincronizar o relógio com o servidor NTP
     try:
         ntptime.settime()
+        # Ajustar para o fuso horário de Amsterdã (UTC+1 ou UTC+2 com horário de verão)
+        tm = localtime()
+        offset = 2 if tm.tm_isdst > 0 else 1
+        adjusted_time = time() + offset * 3600
+        localtime(adjusted_time)
         print("✅ Relógio sincronizado com o servidor NTP")
     except Exception as e:
         print("⚠ Erro ao sincronizar o relógio com o servidor NTP:", e)

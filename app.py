@@ -7,11 +7,12 @@ import json
 import threading
 import time
 import math
+from datetime import datetime
 
 # ------------------- CONFIGURAÇÃO MQTT -------------------
 MQTT_BROKER = "192.168.2.14"  # IP do Broker MQTT
 MQTT_TOPIC = "alvik/sensors"
-GRAVITY = 9.81  # Conversion factor from g to m/s²
+GRAVITY = 9.81  # Convert g to m/s²
 
 # Initialize global variables for yaw and time synchronization
 yaw = 0.0
@@ -60,14 +61,14 @@ def on_message(client, _, msg):
     try:
         payload_raw = msg.payload.decode()
         payload = json.loads(payload_raw)  # Decode JSON
-        current_timestamp = int(payload.get("timestamp", time.time()))  # Ensure integer timestamps
+        timestamp_str = payload.get("timestamp", time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()))  # Convert timestamp
 
         # Ensure time updates happen at 1-second intervals
         if last_timestamp is None:
-            last_timestamp = current_timestamp
+            last_timestamp = timestamp_str
 
-        dt = max(1, current_timestamp - last_timestamp)  # Avoid zero division, ensure dt = 1 sec
-        last_timestamp = current_timestamp
+        dt = 1  # Fix sampling interval to 1 sec
+        last_timestamp = timestamp_str
 
         # Convert accelerometer values from g to m/s²
         accel_x = payload.get("accel_x", 0) * GRAVITY
@@ -92,7 +93,7 @@ def on_message(client, _, msg):
         data["yaw"].append(yaw_value)
 
         # Store timestamp
-        data["timestamp"].append(current_timestamp)
+        data["timestamp"].append(timestamp_str)
 
         # Keep only the last 100 records to avoid overload
         for key in data.keys():
@@ -135,13 +136,18 @@ app.layout = html.Div([
 # Function to generate line plots
 def generate_line_plot(title, x_data, y_data, y_labels):
     fig = go.Figure()
+    
+    # Convert timestamps to datetime format for proper x-axis formatting
+    x_data = [datetime.strptime(t, "%Y-%m-%d %H:%M:%S") for t in x_data]
+
     for y, label in zip(y_data, y_labels):
-        fig.add_trace(go.Scatter(x=[(t - data["timestamp"][0]) for t in x_data], y=y, mode="lines", name=label))
+        fig.add_trace(go.Scatter(x=x_data, y=y, mode="lines", name=label))
 
     if title == "Yaw, Pitch, Roll Angles":
         fig.update_yaxes(range=[-180, 180])
     fig.update_layout(title=title, xaxis_title="Time", yaxis_title="Values",
-                      template="plotly_dark", plot_bgcolor="black", paper_bgcolor="black")
+                      template="plotly_dark", plot_bgcolor="black", paper_bgcolor="black",
+                      xaxis=dict(tickformat="%H:%M:%S"))  # Show time in HH:MM:SS format
     return fig
 
 # Update Sensor Graph (Left, Center, Right)
