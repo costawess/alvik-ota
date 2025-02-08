@@ -88,7 +88,7 @@ try:
 
             # Criar o payload JSON corretamente ✅
             payload = {
-                "timestamp": int(time()),
+                "timestamp": time(),  # Save the time in normal format
                 "left": left,
                 "center": center,
                 "right": right,

@@ -6,14 +6,18 @@ import paho.mqtt.client as mqtt
 import json
 import threading
 import time
-import pandas as pd
+import math
 
 # ------------------- CONFIGURAÇÃO MQTT -------------------
 MQTT_BROKER = "192.168.2.14"  # IP do Broker MQTT
 MQTT_TOPIC = "alvik/sensors"
 GRAVITY = 9.81  # Conversion factor from g to m/s²
 
-# Data storage
+# Initialize global variables for yaw and time synchronization
+yaw = 0.0
+last_timestamp = None
+
+# ------------------- Data Storage -------------------
 data = {
     "timestamp": [],
     "left": [],
@@ -28,36 +32,67 @@ data = {
     "pose_x": [],
     "pose_y": [],
     "pose_theta": [],
+    "yaw": [],
+    "pitch": [],
+    "roll": [],
 }
 
-# MQTT Callback Function
-import math
+# ------------------- Compute Angles -------------------
+def compute_angles(accel_x, accel_y, accel_z, gyro_z, dt):
+    global yaw
 
+    # Compute Pitch and Roll using accelerometer
+    pitch = math.degrees(math.atan2(-accel_x, math.sqrt(accel_y**2 + accel_z**2)))
+    roll = math.degrees(math.atan2(accel_y, math.sqrt(accel_x**2 + accel_z**2)))
+
+    # Integrate Gyro Z to estimate Yaw
+    yaw += gyro_z * dt
+
+    # Normalize Yaw to [-180, 180]
+    yaw = (yaw + 180) % 360 - 180
+
+    return pitch, roll, yaw
+
+# ------------------- MQTT Callback Function -------------------
 def on_message(client, _, msg):
-    global data
+    global data, last_timestamp
+
     try:
         payload_raw = msg.payload.decode()
         payload = json.loads(payload_raw)  # Decode JSON
-        timestamp = payload.get("timestamp", time.time())
+        current_timestamp = int(payload.get("timestamp", time.time()))  # Ensure integer timestamps
+
+        # Ensure time updates happen at 1-second intervals
+        if last_timestamp is None:
+            last_timestamp = current_timestamp
+
+        dt = max(1, current_timestamp - last_timestamp)  # Avoid zero division, ensure dt = 1 sec
+        last_timestamp = current_timestamp
+
+        # Convert accelerometer values from g to m/s²
+        accel_x = payload.get("accel_x", 0) * GRAVITY
+        accel_y = payload.get("accel_y", 0) * GRAVITY
+        accel_z = payload.get("accel_z", 0) * GRAVITY
+        gyro_z = payload.get("gyro_z", 0)
+
+        # Compute angles
+        pitch, roll, yaw_value = compute_angles(accel_x, accel_y, accel_z, gyro_z, dt)
 
         # Store new data points
         for key in data.keys():
             if key in payload:
                 data[key].append(payload[key])
+            else:
+                # Fill missing values with last known or zero
+                data[key].append(data[key][-1] if data[key] else 0)
 
-        # Normalize pose_theta (Yaw) to stay in [-180, 180] degrees
-        if data["pose_theta"]:
-            data["pose_theta"][-1] = (data["pose_theta"][-1] + 180) % 360 - 180
+        # Store computed angles
+        data["pitch"].append(pitch)
+        data["roll"].append(roll)
+        data["yaw"].append(yaw_value)
 
-        # Convert Pose Theta from radians to degrees if needed
-        if abs(data["pose_theta"][-1]) > 360:
-            data["pose_theta"][-1] = math.degrees(data["pose_theta"][-1])
-
-        # Ensure accelerometer is converted from g to m/s²
-        if data["accel_x"]:
-            data["accel_x"][-1] *= 9.81
-            data["accel_y"][-1] *= 9.81
-            data["accel_z"][-1] *= 9.81
+        # Store timestamp
+        data["timestamp"].append(current_timestamp)
 
         # Keep only the last 100 records to avoid overload
         for key in data.keys():
@@ -66,7 +101,7 @@ def on_message(client, _, msg):
     except json.JSONDecodeError as e:
         print(f"❌ JSON Decode Error: {e} - Raw Message: {payload_raw}")
 
-# Start MQTT in a separate thread
+# ------------------- Start MQTT in a Separate Thread -------------------
 def connect_mqtt():
     client = mqtt.Client()
     client.on_message = on_message
@@ -101,8 +136,10 @@ app.layout = html.Div([
 def generate_line_plot(title, x_data, y_data, y_labels):
     fig = go.Figure()
     for y, label in zip(y_data, y_labels):
-        fig.add_trace(go.Scatter(x=x_data, y=y, mode="lines", name=label))
+        fig.add_trace(go.Scatter(x=[(t - data["timestamp"][0]) for t in x_data], y=y, mode="lines", name=label))
 
+    if title == "Yaw, Pitch, Roll Angles":
+        fig.update_yaxes(range=[-180, 180])
     fig.update_layout(title=title, xaxis_title="Time", yaxis_title="Values",
                       template="plotly_dark", plot_bgcolor="black", paper_bgcolor="black")
     return fig
@@ -131,7 +168,7 @@ def update_accel_graph(_):
         ["Accel X", "Accel Y", "Accel Z"]
     )
 
-# Update Gyro Angles (Yaw, Pitch, Roll)
+# Update Gyro Angles (Yaw, Pitch, Roll) from MQTT Data
 @app.callback(Output("gyro-angles-graph", "figure"), Input("interval-component", "n_intervals"))
 def update_gyro_angles_graph(_):
     if not data["timestamp"]:
@@ -139,8 +176,8 @@ def update_gyro_angles_graph(_):
 
     return generate_line_plot(
         "Yaw, Pitch, Roll Angles", data["timestamp"], 
-        [data["pose_theta"], data["gyro_y"], data["gyro_x"]],  # pose_theta (yaw), gyro_y (pitch), gyro_x (roll)
-        ["Yaw (Theta)", "Pitch (Gyro Y)", "Roll (Gyro X)"]
+        [data["yaw"], data["pitch"], data["roll"]],  
+        ["Yaw (Theta)", "Pitch", "Roll"]
     )
 
 # Update Pose Graph (X, Y, Theta)
