@@ -71,9 +71,9 @@ def on_message(client, _, msg):
         last_timestamp = timestamp_str
 
         # Convert accelerometer values from g to m/s²
-        accel_x = -payload.get("accel_x", 0) * GRAVITY
-        accel_y = -payload.get("accel_y", 0) * GRAVITY
-        accel_z = -payload.get("accel_z", 0) * GRAVITY
+        accel_x = payload.get("accel_x", 0) * GRAVITY
+        accel_y = payload.get("accel_y", 0) * GRAVITY
+        accel_z = payload.get("accel_z", 0) * GRAVITY
         gyro_z = payload.get("gyro_z", 0)
 
         # Compute angles
