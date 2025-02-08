@@ -6,11 +6,11 @@ import network
 from umqtt.simple import MQTTClient
 
 # ------------------- CONFIGURAÇÃO MQTT -------------------
-MQTT_BROKER = "192.168.2.14"  # Substitua pelo endereço do seu broker MQTT
+MQTT_BROKER = "192.168.2.14"  # IP do Broker MQTT
 MQTT_TOPIC = "alvik/sensors"
 MQTT_CLIENT_ID = "Alvik_Robot"
 
-# Inicializa Wi-Fi e MQTT
+# ------------------- CONEXÃO WI-FI -------------------
 def connect_wifi():
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
@@ -20,6 +20,7 @@ def connect_wifi():
         sleep_ms(500)
     print("✅ Conectado ao Wi-Fi:", wlan.ifconfig())
 
+# ------------------- CONEXÃO MQTT -------------------
 def connect_mqtt():
     global client
     client = MQTTClient(MQTT_CLIENT_ID, MQTT_BROKER)
@@ -34,7 +35,7 @@ def connect_mqtt():
 alvik = ArduinoAlvik()
 alvik.begin()
 
-# Parâmetros de velocidade e sensores
+# Parâmetros do robô
 BASE_SPEED = 20       # Velocidade base do robô
 TURN_SPEED = 15       # Velocidade para curvas
 LINE_THRESHOLD = 250  # Limite de detecção da linha preta
@@ -48,10 +49,10 @@ alvik.right_led.set_color(0, 0, 1)
 connect_wifi()
 connect_mqtt()
 
+# ------------------- LOOP PRINCIPAL -------------------
 # Aguarda o botão de início ser pressionado
 while alvik.get_touch_ok():
     sleep_ms(50)
-
 while not alvik.get_touch_ok():
     sleep_ms(50)
 
@@ -68,7 +69,7 @@ try:
             # Convert tuple speed to list ✅
             speed_list = list(speed)
 
-            # Generate a valid JSON payload ✅
+            # Criar o payload JSON corretamente ✅
             payload = {
                 "timestamp": int(time()),
                 "left": left,
@@ -86,15 +87,48 @@ try:
                 "pose_theta": pose[2]
             }
 
-            # Convert payload to JSON string ✅
+            # Converter para JSON
             json_payload = json.dumps(payload)
 
+            # Publicar no MQTT
             try:
                 client.publish(MQTT_TOPIC, json_payload)
                 print("📡 Enviado MQTT:", json_payload)
             except Exception as e:
                 print("⚠ Erro ao publicar MQTT:", e)
-                connect_mqtt()  # Reconectar se perder conexão
+                connect_mqtt()  # Reconectar MQTT se perder conexão
+
+            # ------------------- LÓGICA DE SEGUIR A LINHA -------------------
+            if left > LINE_THRESHOLD and center < LINE_THRESHOLD and right < LINE_THRESHOLD:
+                # Curva acentuada à esquerda
+                alvik.set_wheels_speed(-TURN_SPEED, TURN_SPEED)
+                while alvik.get_line_sensors()[1] < LINE_THRESHOLD:
+                    sleep_ms(10)
+
+            elif right > LINE_THRESHOLD and center < LINE_THRESHOLD and left < LINE_THRESHOLD:
+                # Curva acentuada à direita
+                alvik.set_wheels_speed(TURN_SPEED, -TURN_SPEED)
+                while alvik.get_line_sensors()[1] < LINE_THRESHOLD:
+                    sleep_ms(10)
+
+            elif left > SLOW_DOWN_THRESHOLD and center > LINE_THRESHOLD and right < LINE_THRESHOLD:
+                # Ajuste leve à esquerda
+                alvik.set_wheels_speed(BASE_SPEED // 2, BASE_SPEED)
+
+            elif right > SLOW_DOWN_THRESHOLD and center > LINE_THRESHOLD and left < LINE_THRESHOLD:
+                # Ajuste leve à direita
+                alvik.set_wheels_speed(BASE_SPEED, BASE_SPEED // 2)
+
+            elif center > LINE_THRESHOLD:
+                # Seguir em frente
+                alvik.set_wheels_speed(BASE_SPEED, BASE_SPEED)
+
+            else:
+                # Parar e procurar a linha
+                alvik.set_wheels_speed(-10, -10)
+                sleep_ms(100)
+                alvik.set_wheels_speed(0, 0)
+                sleep_ms(100)
 
             sleep_ms(50)  # Pequena pausa para estabilidade
 
@@ -106,6 +140,6 @@ try:
             sleep_ms(100)
 
 except KeyboardInterrupt:
-    print('Program interrupted')
+    print('❌ Programa interrompido')
     alvik.stop()
     sys.exit()
