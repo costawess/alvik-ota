@@ -2,28 +2,21 @@ from arduino_alvik import ArduinoAlvik
 from time import sleep_ms
 import sys
 
-def calculate_center(left: int, center: int, right: int):
-    centroid = 0
-    sum_weight = left + center + right
-    sum_values = left + 2 * center + 3 * right
-    if sum_weight != 0:
-        centroid = sum_values / sum_weight
-        centroid = 2 - centroid
-    return centroid
-
+# Inicializa o robô Alvik
 alvik = ArduinoAlvik()
 alvik.begin()
 
-kp = 60.0
-kd = 15.0
-base_speed = 10
-line_threshold = 250  # threshold for detecting the line
-last_error = 0.0  # Initialize last_error for PD control
+# Parâmetros de velocidade e sensores
+BASE_SPEED = 20       # Velocidade base do robô
+TURN_SPEED = 15       # Velocidade para curvas
+LINE_THRESHOLD = 250  # Limite de detecção da linha preta
+SLOW_DOWN_THRESHOLD = 400  # Sensibilidade extra para ajustes finos
 
-alvik.left_led.set_color(0, 0, 1)
+# Indicar que o robô está pronto para iniciar
+alvik.left_led.set_color(0, 0, 1)  # Azul
 alvik.right_led.set_color(0, 0, 1)
 
-# Wait for the start button to be pressed
+# Aguarda o botão de início ser pressionado
 while alvik.get_touch_ok():
     sleep_ms(50)
 
@@ -32,50 +25,46 @@ while not alvik.get_touch_ok():
 
 try:
     while True:
-        # Main loop to check if the stop button is pressed
+        # Aguarda até que o botão de parada seja pressionado
         while not alvik.get_touch_cancel():
-            line_sensors = alvik.get_line_sensors()
-            left, center, right = line_sensors  # Split into three variables
+            left, center, right = alvik.get_line_sensors()  # Lê os sensores
 
-            # Detect 90-degree turn to the left
-            if left > line_threshold and center < line_threshold and right < line_threshold:
-                # Turn left until the center sensor detects the line again
-                alvik.set_wheels_speed(-15, 15)
-                while alvik.get_line_sensors()[1] < line_threshold:
+            # **1. CURVA ACENTUADA PARA A ESQUERDA (90°)**
+            if left > LINE_THRESHOLD and center < LINE_THRESHOLD and right < LINE_THRESHOLD:
+                alvik.set_wheels_speed(-TURN_SPEED, TURN_SPEED)
+                while alvik.get_line_sensors()[1] < LINE_THRESHOLD:
                     sleep_ms(10)
 
-            # Detect 90-degree turn to the right
-            elif right > line_threshold and center < line_threshold and left < line_threshold:
-                # Turn right until the center sensor detects the line again
-                alvik.set_wheels_speed(15, -15)
-                while alvik.get_line_sensors()[1] < line_threshold:
+            # **2. CURVA ACENTUADA PARA A DIREITA (90°)**
+            elif right > LINE_THRESHOLD and center < LINE_THRESHOLD and left < LINE_THRESHOLD:
+                alvik.set_wheels_speed(TURN_SPEED, -TURN_SPEED)
+                while alvik.get_line_sensors()[1] < LINE_THRESHOLD:
                     sleep_ms(10)
 
+            # **3. LEVE AJUSTE PARA A ESQUERDA**
+            elif left > SLOW_DOWN_THRESHOLD and center > LINE_THRESHOLD and right < LINE_THRESHOLD:
+                alvik.set_wheels_speed(BASE_SPEED // 2, BASE_SPEED)
+
+            # **4. LEVE AJUSTE PARA A DIREITA**
+            elif right > SLOW_DOWN_THRESHOLD and center > LINE_THRESHOLD and left < LINE_THRESHOLD:
+                alvik.set_wheels_speed(BASE_SPEED, BASE_SPEED // 2)
+
+            # **5. LINHA CENTRALIZADA → SEGUE EM FRENTE**
+            elif center > LINE_THRESHOLD:
+                alvik.set_wheels_speed(BASE_SPEED, BASE_SPEED)
+
+            # **6. LINHA PERDIDA → PARE PARA REENCONTRAR**
             else:
-                # Normal line-following using PD
-                error = calculate_center(left, center, right)
-                
-                derivative = error - last_error
-                last_error = error
-                control = (error * kp) + (derivative * kd)
+                alvik.set_wheels_speed(-10, -10)  # Dá um pequeno passo para trás
+                sleep_ms(100)
+                alvik.set_wheels_speed(0, 0)  # Para completamente
+                sleep_ms(100)
 
-                left_speed = max(0, min(base_speed - control, 60))
-                right_speed = max(0, min(base_speed + control, 60))
+            sleep_ms(50)  # Pequena pausa para estabilidade
 
-                alvik.set_wheels_speed(left_speed, right_speed)
-
-                if abs(control) > 0.2:
-                    alvik.left_led.set_color(1, 0, 0)  # Red indicates correction
-                    alvik.right_led.set_color(0, 0, 0)
-                else:
-                    alvik.left_led.set_color(0, 1, 0)  # Green indicates centered
-                    alvik.right_led.set_color(0, 1, 0)
-
-            sleep_ms(100)
-
-        # Reset after stop button is pressed
+        # Reset após botão de parada
         while not alvik.get_touch_ok():
-            alvik.left_led.set_color(0, 0, 1)
+            alvik.left_led.set_color(0, 0, 1)  # Azul indicando que está aguardando
             alvik.right_led.set_color(0, 0, 1)
             alvik.brake()
             sleep_ms(100)
