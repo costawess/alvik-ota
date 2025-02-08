@@ -64,13 +64,13 @@ try:
             # get accel data and gyro data
             accel_data = alvik.get_accelerations()
             gyro_data = alvik.get_gyros()
-            speed = alvik.get_speed()
+            speed = alvik.get_wheels_speed()
             pose = alvik.get_pose()
-            servo_pos = alvik.get_servo_positions()
+            # servo_pos = alvik.get_servo_positions()  # Define servo_pos
 
             # Publica os dados dos sensores no MQTT
             timestamp = int(time())
-            payload = f'{{"timestamp": {timestamp}, "left": {left}, "center": {center}, "right": {right}, "accel_x": {accel_data[0]}, "accel_y": {accel_data[1]}, "accel_z": {accel_data[2]}, "gyro_x": {gyro_data[0]}, "gyro_y": {gyro_data[1]}, "gyro_z": {gyro_data[2]}, "speed": {speed}, "pose_x": {pose[0]}, "pose_y": {pose[1]}, "pose_theta": {pose[2]}, "servo_pos_1": {servo_pos[0]}, "servo_pos_2": {servo_pos[1]}}}'
+            payload = f'{{"timestamp": {timestamp}, "left": {left}, "center": {center}, "right": {right}, "accel_x": {accel_data[0]}, "accel_y": {accel_data[1]}, "accel_z": {accel_data[2]}, "gyro_x": {gyro_data[0]}, "gyro_y": {gyro_data[1]}, "gyro_z": {gyro_data[2]}, "speed": {speed}, "pose_x": {pose[0]}, "pose_y": {pose[1]}, "pose_theta": {pose[2]}}}'
             try:
                 client.publish(MQTT_TOPIC, payload)
                 print("📡 Enviado MQTT:", payload)
