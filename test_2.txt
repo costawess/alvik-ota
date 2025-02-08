@@ -1,7 +1,0 @@
-
-
-
-# Exemplo de uso do strip() com caracteres específicos
-texto = "###Olá, mundo!###"
-texto_limpo = texto.strip("#")
-print(f"'{texto_limpo}'")  # Saída: 'Olá, mundo!'
