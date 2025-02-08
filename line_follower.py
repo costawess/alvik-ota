@@ -4,6 +4,7 @@ import sys
 import network
 from umqtt.simple import MQTTClient
 from time import time
+import math
 
 # ------------------- CONFIGURAÇÃO MQTT -------------------
 MQTT_BROKER = "192.168.2.14"  # Substitua pelo endereço do seu broker MQTT
@@ -48,6 +49,22 @@ alvik.right_led.set_color(0, 0, 1)
 connect_wifi()
 connect_mqtt()
 
+# Inicializa variáveis para cálculo do yaw
+yaw = 0.0
+last_time = time()
+
+def get_yaw():
+    """ Obtém o ângulo yaw do giroscópio. """
+    global yaw, last_time
+    gyro_z = alvik.get_gyro()[2]  # Obtém o valor do eixo Z do giroscópio
+    current_time = time()
+    dt = current_time - last_time  # Tempo desde a última leitura
+
+    yaw += gyro_z * dt  # Integrar giroscópio para obter ângulo
+    yaw = yaw % 360  # Mantém o yaw no intervalo de 0-360°
+    last_time = current_time
+    return round(yaw, 2)
+
 # Aguarda o botão de início ser pressionado
 while alvik.get_touch_ok():
     sleep_ms(50)
@@ -60,10 +77,11 @@ try:
         # Aguarda até que o botão de parada seja pressionado
         while not alvik.get_touch_cancel():
             left, center, right = alvik.get_line_sensors()  # Lê os sensores
+            yaw_angle = get_yaw()  # Obtém o ângulo yaw do giroscópio
 
-            # Publica os dados dos sensores no MQTT
+            # Publica os dados dos sensores + yaw no MQTT
             timestamp = int(time())
-            payload = f'{{"timestamp": {timestamp}, "left": {left}, "center": {center}, "right": {right}}}'
+            payload = f'{{"timestamp": {timestamp}, "left": {left}, "center": {center}, "right": {right}, "yaw": {yaw_angle}}}'
             try:
                 client.publish(MQTT_TOPIC, payload)
                 print("📡 Enviado MQTT:", payload)
