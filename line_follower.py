@@ -16,7 +16,7 @@ alvik.begin()
 
 kp = 60.0
 kd = 15.0
-base_speed = 30
+base_speed = 10
 line_threshold = 250  # threshold for detecting the line
 last_error = 0.0  # Initialize last_error for PD control
 
