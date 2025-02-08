@@ -8,123 +8,172 @@ import threading
 import time
 import pandas as pd
 
-baseline = 400  # Sensibilidade extra para ajustes finos
+baseline = 500  # Sensibilidade para ativação dos sensores
 
 # ------------------- CONFIGURAÇÃO MQTT -------------------
 MQTT_BROKER = "192.168.2.14"  # IP do Broker MQTT
 MQTT_TOPIC = "alvik/sensors"
 
 # Data storage
-data = {"timestamp": [], "left": [], "center": [], "right": []}
-sensor_alerts = []  # Stores which sensors are above 500
+data = {
+    "timestamp": [],
+    "left": [],
+    "center": [],
+    "right": [],
+    "accel_x": [],
+    "accel_y": [],
+    "accel_z": [],
+    "gyro_x": [],
+    "gyro_y": [],
+    "gyro_z": [],
+    "pose_x": [],
+    "pose_y": [],
+    "pose_theta": [],
+    "speed_left": [],
+    "speed_right": [],
+}
+sensor_alerts = []  # Stores which sensors are above baseline
 
-# Função chamada quando uma mensagem MQTT é recebida
+# MQTT Callback Function
 def on_message(client, _, msg):
     global data, sensor_alerts
     try:
         payload = json.loads(msg.payload.decode())
         timestamp = payload.get("timestamp", time.time())
-        left = payload.get("left", 0)
-        center = payload.get("center", 0)
-        right = payload.get("right", 0)
 
-        # Adicionar os dados na estrutura
-        data["timestamp"].append(timestamp)
-        data["left"].append(left)
-        data["center"].append(center)
-        data["right"].append(right)
+        # Store new data points
+        for key in data.keys():
+            if key in payload:
+                if isinstance(payload[key], tuple):  # Unpacking speed tuple
+                    data["speed_left"].append(payload[key][0])
+                    data["speed_right"].append(payload[key][1])
+                else:
+                    data[key].append(payload[key])
 
-        # Atualizar lista de sensores acima de 500
-        active_sensors = []
-        if left > baseline:
-            active_sensors.append("Left")
-        if center > baseline:
-            active_sensors.append("Center")
-        if right > baseline:
-            active_sensors.append("Right")
+        # Keep only the last 100 records to avoid overload
+        for key in data.keys():
+            data[key] = data[key][-100:]
+
+        # Identify active sensors above the baseline
+        active_sensors = [key for key in ["left", "center", "right"] if payload.get(key, 0) > baseline]
         sensor_alerts[:] = active_sensors  # Update global variable
-
-        # Manter os últimos 100 registros para não sobrecarregar
-        if len(data["timestamp"]) > 100:
-            for key in data.keys():
-                data[key] = data[key][-100:]
 
     except Exception as e:
         print(f"Erro ao processar mensagem MQTT: {e}")
 
-# Conectar ao Broker MQTT em uma thread separada
+# Start MQTT in a separate thread
 def connect_mqtt():
     client = mqtt.Client()
     client.on_message = on_message
     client.connect(MQTT_BROKER, 1883, 60)
     client.subscribe(MQTT_TOPIC)
-    client.loop_start()  # Rodar em segundo plano
+    client.loop_start()  # Run in the background
 
-# Iniciar MQTT em uma thread separada
 threading.Thread(target=connect_mqtt, daemon=True).start()
 
 # ------------------- DASHBOARD DASH -------------------
-app = dash.Dash(__name__, assets_folder='assets')
+app = dash.Dash(__name__)
 
 app.layout = html.Div([
-    html.H1("Dashboard do Alvik - Sensores"),
-    
+    html.H1("Dashboard do Alvik - Sensores", style={"textAlign": "center", "color": "white"}),
+
     html.Div([
-        # Left Side: Live Graph
+        html.Div([dcc.Graph(id="sensor-graph")], className="six columns"),
         html.Div([
-            dcc.Graph(id="live-graph"),
-        ], className="six columns"),
-        
-        # Right Side: Active Sensors Above 500
-        html.Div([
-            html.H3(f"Sensores Ativados (>{baseline}):"),
+            html.H3(f"Sensores Ativados (>{baseline}):", style={"color": "white"}),
             html.Ul(id="sensor-status", style={"fontSize": "20px", "color": "red"})
         ], className="six columns"),
     ], className="row"),
-    
-    dcc.Interval(
-        id="interval-component",
-        interval=1000,  # Atualiza a cada 1 segundo
-        n_intervals=0
-    )
-])
 
-@app.callback(
-    Output("live-graph", "figure"),
-    Input("interval-component", "n_intervals")
-)
-def update_graph(_):
-    global data
+    html.Div([
+        html.Div([dcc.Graph(id="accel-graph")], className="six columns"),
+        html.Div([dcc.Graph(id="gyro-graph")], className="six columns"),
+    ], className="row"),
+
+    html.Div([
+        html.Div([dcc.Graph(id="pose-graph")], className="six columns"),
+        html.Div([dcc.Graph(id="gyro-3d-graph")], className="six columns"),
+    ], className="row"),
+
+    html.Div([
+        html.Div([dcc.Graph(id="speed-graph")], className="six columns"),
+    ], className="row"),
+
+    dcc.Interval(id="interval-component", interval=1000, n_intervals=0)  # Update every second
+], style={"backgroundColor": "black", "color": "white"})
+
+# ------------------- CALLBACKS -------------------
+
+# Function to generate line plots
+def generate_line_plot(title, x_data, y_data, y_label):
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=x_data, y=y_data, mode="lines", name=title))
+    fig.update_layout(title=title, xaxis_title="Time", yaxis_title=y_label,
+                      template="plotly_dark", plot_bgcolor="black", paper_bgcolor="black")
+    return fig
+
+# Update Sensor Graph (Left, Center, Right)
+@app.callback(Output("sensor-graph", "figure"), Input("interval-component", "n_intervals"))
+def update_sensor_graph(_):
     if not data["timestamp"]:
         return go.Figure()
 
-    df = pd.DataFrame(data)
-    
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=df["timestamp"], y=df["left"], mode="lines", name="Sensor Left"))
-    fig.add_trace(go.Scatter(x=df["timestamp"], y=df["center"], mode="lines", name="Sensor Center"))
-    fig.add_trace(go.Scatter(x=df["timestamp"], y=df["right"], mode="lines", name="Sensor Right"))
+    return generate_line_plot("Sensor Readings", data["timestamp"], [data["left"], data["center"], data["right"]], "Sensor Values")
 
-    fig.update_layout(
-        title="Leitura dos Sensores ao Longo do Tempo",
-        xaxis_title="Tempo",
-        yaxis_title="Valor do Sensor",
-        legend_title="Sensores",
-        template="plotly_dark",
-        plot_bgcolor="black",
-        paper_bgcolor="black"
-    )
+# Update Accelerometer Graph
+@app.callback(Output("accel-graph", "figure"), Input("interval-component", "n_intervals"))
+def update_accel_graph(_):
+    if not data["timestamp"]:
+        return go.Figure()
+
+    return generate_line_plot("Accelerometer Data", data["timestamp"], [data["accel_x"], data["accel_y"], data["accel_z"]], "Acceleration")
+
+# Update Gyroscope Graph
+@app.callback(Output("gyro-graph", "figure"), Input("interval-component", "n_intervals"))
+def update_gyro_graph(_):
+    if not data["timestamp"]:
+        return go.Figure()
+
+    return generate_line_plot("Gyroscope Data", data["timestamp"], [data["gyro_x"], data["gyro_y"], data["gyro_z"]], "Rotation Speed")
+
+# Update Pose Graph (X, Y)
+@app.callback(Output("pose-graph", "figure"), Input("interval-component", "n_intervals"))
+def update_pose_graph(_):
+    if not data["timestamp"]:
+        return go.Figure()
+
+    return generate_line_plot("Robot Pose", data["timestamp"], [data["pose_x"], data["pose_y"], data["pose_theta"]], "Position")
+
+# Update Speed Graph
+@app.callback(Output("speed-graph", "figure"), Input("interval-component", "n_intervals"))
+def update_speed_graph(_):
+    if not data["timestamp"]:
+        return go.Figure()
+
+    return generate_line_plot("Wheel Speed", data["timestamp"], [data["speed_left"], data["speed_right"]], "Speed")
+
+# Update Gyroscope 3D Visualization
+@app.callback(Output("gyro-3d-graph", "figure"), Input("interval-component", "n_intervals"))
+def update_gyro_3d_graph(_):
+    if not data["timestamp"]:
+        return go.Figure()
+
+    latest_idx = -1
+    x, y, z = data["gyro_x"][latest_idx], data["gyro_y"][latest_idx], data["gyro_z"][latest_idx]
+
+    fig = go.Figure(data=[go.Scatter3d(
+        x=[0, x], y=[0, y], z=[0, z], mode="lines", marker=dict(size=5, color="red")
+    )])
     
+    fig.update_layout(title="Gyroscope 3D Orientation", template="plotly_dark",
+                      plot_bgcolor="black", paper_bgcolor="black",
+                      scene=dict(xaxis_title="Gyro X", yaxis_title="Gyro Y", zaxis_title="Gyro Z"))
     return fig
 
-@app.callback(
-    Output("sensor-status", "children"),
-    Input("interval-component", "n_intervals")
-)
+# Update Active Sensors
+@app.callback(Output("sensor-status", "children"), Input("interval-component", "n_intervals"))
 def update_sensor_status(_):
-    if not sensor_alerts:
-        return [html.Li("Nenhum sensor acima de 500", style={"color": "green"})]
-    return [html.Li(f"{sensor}", style={"color": "red"}) for sensor in sensor_alerts]
+    return [html.Li(sensor, style={"color": "red"}) for sensor in sensor_alerts] if sensor_alerts else [html.Li("No sensors above threshold", style={"color": "green"})]
 
 if __name__ == "__main__":
     app.run_server(debug=True, port=8080)

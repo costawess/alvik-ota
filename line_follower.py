@@ -70,7 +70,22 @@ try:
 
             # Publica os dados dos sensores no MQTT
             timestamp = int(time())
-            payload = f'{{"timestamp": {timestamp}, "left": {left}, "center": {center}, "right": {right}, "accel_x": {accel_data[0]}, "accel_y": {accel_data[1]}, "accel_z": {accel_data[2]}, "gyro_x": {gyro_data[0]}, "gyro_y": {gyro_data[1]}, "gyro_z": {gyro_data[2]}, "speed": {speed}, "pose_x": {pose[0]}, "pose_y": {pose[1]}, "pose_theta": {pose[2]}}}'
+            payload = (
+                f'{{"timestamp": {timestamp}, '
+                f'"left": {left}, '
+                f'"center": {center}, '
+                f'"right": {right}, '
+                f'"accel_x": {accel_data[0]}, '
+                f'"accel_y": {accel_data[1]}, '
+                f'"accel_z": {accel_data[2]}, '
+                f'"gyro_x": {gyro_data[0]}, '
+                f'"gyro_y": {gyro_data[1]}, '
+                f'"gyro_z": {gyro_data[2]}, '
+                f'"speed": {speed}, '
+                f'"pose_x": {pose[0]}, '
+                f'"pose_y": {pose[1]}, '
+                f'"pose_theta": {pose[2]}}}'
+            )
             try:
                 client.publish(MQTT_TOPIC, payload)
                 print("📡 Enviado MQTT:", payload)
