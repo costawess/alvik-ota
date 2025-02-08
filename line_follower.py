@@ -51,6 +51,10 @@ def calculate_orientation(accel_data):
 alvik = ArduinoAlvik()
 alvik.begin()
 
+# Indicar que o robô está pronto para iniciar
+alvik.left_led.set_color(1, 0.5, 0)  # Laranja
+alvik.right_led.set_color(1, 0.5, 0)
+
 # Parâmetros do robô
 BASE_SPEED = 20       # Velocidade base do robô
 TURN_SPEED = 15       # Velocidade para curvas
@@ -58,8 +62,8 @@ LINE_THRESHOLD = 250  # Limite de detecção da linha preta
 SLOW_DOWN_THRESHOLD = 400  # Sensibilidade extra para ajustes finos
 
 # Indicar que o robô está pronto para iniciar
-alvik.left_led.set_color(0, 0, 1)  # Azul
-alvik.right_led.set_color(0, 0, 1)
+alvik.left_led.set_color(0, 1, 0)  # Verde
+alvik.right_led.set_color(0, 1, 0)
 
 # Conectar Wi-Fi e MQTT
 connect_wifi()
