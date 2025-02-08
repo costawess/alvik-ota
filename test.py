@@ -4,4 +4,4 @@ print('Agora o Alvik vai andar :)!')
 
 print(":]")
 
-print("proximo passo, controle do Alvik")
+print("proximo passo, controle do Alvik!")
