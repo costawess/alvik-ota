@@ -3,6 +3,7 @@ from arduino_alvik import ArduinoAlvik
 from time import sleep_ms, time
 import sys
 import network
+from math import atan2, sqrt
 from umqtt.simple import MQTTClient
 
 # ------------------- CONFIGURAÇÃO MQTT -------------------
@@ -30,6 +31,20 @@ def connect_mqtt():
     except Exception as e:
         print("❌ Erro ao conectar ao MQTT:", e)
         sys.exit()
+
+def calculate_orientation(accel_data):
+    accel_x, accel_y, accel_z = accel_data
+
+    # Roll: rotação em torno do eixo X
+    roll = atan2(accel_y, accel_z)
+
+    # Pitch: rotação em torno do eixo Y
+    pitch = atan2(-accel_x, sqrt(accel_y**2 + accel_z**2))
+
+    # Yaw não pode ser calculado apenas com o acelerômetro
+    yaw = 0  # Placeholder, pois é necessário um magnetômetro para calcular o yaw
+
+    return yaw, pitch, roll
 
 # ------------------- CONFIGURAÇÃO DO ROBÔ -------------------
 alvik = ArduinoAlvik()
@@ -66,6 +81,8 @@ try:
             speed = alvik.get_wheels_speed()
             pose = alvik.get_pose()
 
+            yaw, pitch, roll = calculate_orientation(accel_data)
+
             # Convert tuple speed to list ✅
             speed_list = list(speed)
 
@@ -84,7 +101,10 @@ try:
                 "speed": speed_list,  # ✅ Now it's a valid JSON list
                 "pose_x": pose[0],
                 "pose_y": pose[1],
-                "pose_theta": pose[2]
+                "pose_theta": pose[2],
+                "yaw": yaw,
+                "pitch": pitch,
+                "roll": roll
             }
 
             # Converter para JSON
