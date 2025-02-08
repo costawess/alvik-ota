@@ -76,47 +76,53 @@ try:
         # Aguarda até que o botão de parada seja pressionado
         while not alvik.get_touch_cancel():
             left, center, right = alvik.get_line_sensors()  # Lê os sensores
-            accel_data = alvik.get_accelerations()
-            gyro_data = alvik.get_gyros()
-            speed = alvik.get_wheels_speed()
-            pose = alvik.get_pose()
 
-            yaw, pitch, roll = calculate_orientation(accel_data)
+            # Publicar no MQTT a cada meio segundo
+            current_time = time()
+            if current_time - last_publish_time >= 0.5:
+                accel_data = alvik.get_accelerations()
+                gyro_data = alvik.get_gyros()
+                speed = alvik.get_wheels_speed()
+                pose = alvik.get_pose()
 
-            # Convert tuple speed to list ✅
-            speed_list = list(speed)
+                yaw, pitch, roll = calculate_orientation(accel_data)
 
-            # Criar o payload JSON corretamente ✅
-            payload = {
-                "timestamp": time(),  # Save the time in normal format
-                "left": left,
-                "center": center,
-                "right": right,
-                "accel_x": accel_data[0],
-                "accel_y": accel_data[1],
-                "accel_z": accel_data[2],
-                "gyro_x": gyro_data[0],
-                "gyro_y": gyro_data[1],
-                "gyro_z": gyro_data[2],
-                "speed": speed_list,  # ✅ Now it's a valid JSON list
-                "pose_x": pose[0],
-                "pose_y": pose[1],
-                "pose_theta": pose[2],
-                "yaw": yaw,
-                "pitch": pitch,
-                "roll": roll
-            }
+                # Convert tuple speed to list ✅
+                speed_list = list(speed)
 
-            # Converter para JSON
-            json_payload = json.dumps(payload)
+                # Criar o payload JSON corretamente ✅
+                payload = {
+                    "timestamp": current_time,  # Save the time in normal format
+                    "left": left,
+                    "center": center,
+                    "right": right,
+                    "accel_x": accel_data[0],
+                    "accel_y": accel_data[1],
+                    "accel_z": accel_data[2],
+                    "gyro_x": gyro_data[0],
+                    "gyro_y": gyro_data[1],
+                    "gyro_z": gyro_data[2],
+                    "speed": speed_list,  # ✅ Now it's a valid JSON list
+                    "pose_x": pose[0],
+                    "pose_y": pose[1],
+                    "pose_theta": pose[2],
+                    "yaw": yaw,
+                    "pitch": pitch,
+                    "roll": roll
+                }
 
-            # Publicar no MQTT
-            try:
-                client.publish(MQTT_TOPIC, json_payload)
-                print("📡 Enviado MQTT:", json_payload)
-            except Exception as e:
-                print("⚠ Erro ao publicar MQTT:", e)
-                connect_mqtt()  # Reconectar MQTT se perder conexão
+                # Converter para JSON
+                json_payload = json.dumps(payload)
+
+                # Publicar no MQTT
+                try:
+                    client.publish(MQTT_TOPIC, json_payload)
+                    print("📡 Enviado MQTT:", json_payload)
+                except Exception as e:
+                    print("⚠ Erro ao publicar MQTT:", e)
+                    connect_mqtt()  # Reconectar MQTT se perder conexão
+
+                last_publish_time = current_time
 
             # ------------------- LÓGICA DE SEGUIR A LINHA -------------------
             if left > LINE_THRESHOLD and center < LINE_THRESHOLD and right < LINE_THRESHOLD:
