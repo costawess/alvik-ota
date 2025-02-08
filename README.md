@@ -1,1 +1,2 @@
-# alvik-ota
+# ota_test
+OTA Test
