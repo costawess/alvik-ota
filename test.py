@@ -13,3 +13,5 @@ print("Um ultimo test :)!")
 print("Teste de rapidez no update!")
 
 print( 'deu certo!' )
+
+print("mais um teste :)")
