@@ -1,8 +1,35 @@
 from arduino_alvik import ArduinoAlvik
 from time import sleep_ms
 import sys
+import network
+from umqtt.simple import MQTTClient
 
-# Inicializa o robô Alvik
+# ------------------- CONFIGURAÇÃO MQTT -------------------
+MQTT_BROKER = "192.168.1.100"  # Substitua pelo endereço do seu broker MQTT
+MQTT_TOPIC = "alvik/sensors"
+MQTT_CLIENT_ID = "Alvik_Robot"
+
+# Inicializa Wi-Fi e MQTT
+def connect_wifi():
+    wlan = network.WLAN(network.STA_IF)
+    wlan.active(True)
+    wlan.connect("H369AE3F1EF", "CC726D5CED93")  # Substitua pelo seu Wi-Fi
+    while not wlan.isconnected():
+        print("Conectando ao Wi-Fi...")
+        sleep_ms(500)
+    print("✅ Conectado ao Wi-Fi:", wlan.ifconfig())
+
+def connect_mqtt():
+    global client
+    client = MQTTClient(MQTT_CLIENT_ID, MQTT_BROKER)
+    try:
+        client.connect()
+        print("✅ Conectado ao MQTT Broker!")
+    except Exception as e:
+        print("❌ Erro ao conectar ao MQTT:", e)
+        sys.exit()
+
+# ------------------- CONFIGURAÇÃO DO ROBÔ -------------------
 alvik = ArduinoAlvik()
 alvik.begin()
 
@@ -16,6 +43,10 @@ SLOW_DOWN_THRESHOLD = 400  # Sensibilidade extra para ajustes finos
 alvik.left_led.set_color(0, 0, 1)  # Azul
 alvik.right_led.set_color(0, 0, 1)
 
+# Conectar Wi-Fi e MQTT
+connect_wifi()
+connect_mqtt()
+
 # Aguarda o botão de início ser pressionado
 while alvik.get_touch_ok():
     sleep_ms(50)
@@ -28,6 +59,15 @@ try:
         # Aguarda até que o botão de parada seja pressionado
         while not alvik.get_touch_cancel():
             left, center, right = alvik.get_line_sensors()  # Lê os sensores
+
+            # Publica os dados dos sensores no MQTT
+            payload = f'{{"left": {left}, "center": {center}, "right": {right}}}'
+            try:
+                client.publish(MQTT_TOPIC, payload)
+                print("📡 Enviado MQTT:", payload)
+            except Exception as e:
+                print("⚠ Erro ao publicar MQTT:", e)
+                connect_mqtt()  # Reconectar se perder conexão
 
             # **1. CURVA ACENTUADA PARA A ESQUERDA (90°)**
             if left > LINE_THRESHOLD and center < LINE_THRESHOLD and right < LINE_THRESHOLD:
