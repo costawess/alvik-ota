@@ -122,9 +122,9 @@ try:
                     "left": left,
                     "center": center,
                     "right": right,
-                    "accel_x": round(accel_data[0], 4),  # Ensure float precision
-                    "accel_y": round(accel_data[1], 4),
-                    "accel_z": round(accel_data[2], 4),
+                    "accel_x": -round(accel_data[0], 4),  # Ensure float precision
+                    "accel_y": -round(accel_data[1], 4),
+                    "accel_z": -round(accel_data[2], 4),
                     "gyro_x": round(gyro_data[0], 4),
                     "gyro_y": round(gyro_data[1], 4),
                     "gyro_z": round(gyro_data[2], 4),
