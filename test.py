@@ -9,3 +9,5 @@ print("proximo passo, controle do Alvik!")
 print("Vamos lá!")
 
 print("Um ultimo test :)!")
+
+print("Teste de rapidez no update!")
