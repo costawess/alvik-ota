@@ -3,6 +3,7 @@ from time import sleep_ms
 import sys
 import network
 from umqtt.simple import MQTTClient
+from time import time
 
 # ------------------- CONFIGURAÇÃO MQTT -------------------
 MQTT_BROKER = "192.168.2.14"  # Substitua pelo endereço do seu broker MQTT
@@ -61,7 +62,8 @@ try:
             left, center, right = alvik.get_line_sensors()  # Lê os sensores
 
             # Publica os dados dos sensores no MQTT
-            payload = f'{{"left": {left}, "center": {center}, "right": {right}}}'
+            timestamp = int(time())
+            payload = f'{{"timestamp": {timestamp}, "left": {left}, "center": {center}, "right": {right}}}'
             try:
                 client.publish(MQTT_TOPIC, payload)
                 print("📡 Enviado MQTT:", payload)
