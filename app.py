@@ -35,16 +35,20 @@ data = {
 sensor_alerts = []  # Stores which sensors are above baseline
 
 # MQTT Callback Function
+# MQTT Callback Function
 def on_message(client, _, msg):
     global data, sensor_alerts
     try:
-        payload = json.loads(msg.payload.decode())
+        payload_raw = msg.payload.decode()
+        print(f"📥 RAW MQTT MESSAGE: {payload_raw}")  # Debugging incoming data
+
+        payload = json.loads(payload_raw)  # Decode JSON
         timestamp = payload.get("timestamp", time.time())
 
         # Store new data points
         for key in data.keys():
             if key in payload:
-                if isinstance(payload[key], tuple):  # Unpacking speed tuple
+                if isinstance(payload[key], list) and len(payload[key]) == 2:  # Handle "speed" list correctly
                     data["speed_left"].append(payload[key][0])
                     data["speed_right"].append(payload[key][1])
                 else:
@@ -58,8 +62,9 @@ def on_message(client, _, msg):
         active_sensors = [key for key in ["left", "center", "right"] if payload.get(key, 0) > baseline]
         sensor_alerts[:] = active_sensors  # Update global variable
 
-    except Exception as e:
-        print(f"Erro ao processar mensagem MQTT: {e}")
+    except json.JSONDecodeError as e:
+        print(f"❌ JSON Decode Error: {e} - Raw Message: {payload_raw}")
+
 
 # Start MQTT in a separate thread
 def connect_mqtt():
