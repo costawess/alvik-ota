@@ -1,6 +1,6 @@
 import json
 from arduino_alvik import ArduinoAlvik
-from time import sleep_ms, time
+from time import sleep_ms, time, localtime, strftime
 import sys
 import network
 from math import atan2, sqrt
@@ -32,6 +32,7 @@ def connect_mqtt():
         print("❌ Erro ao conectar ao MQTT:", e)
         sys.exit()
 
+# ------------------- FUNÇÃO PARA CALCULAR ORIENTAÇÃO -------------------
 def calculate_orientation(accel_data):
     accel_x, accel_y, accel_z = accel_data
 
@@ -64,6 +65,9 @@ alvik.right_led.set_color(0, 0, 1)
 connect_wifi()
 connect_mqtt()
 
+# Inicializar tempo da última publicação MQTT
+last_publish_time = time()
+
 # ------------------- LOOP PRINCIPAL -------------------
 # Aguarda o botão de início ser pressionado
 while alvik.get_touch_ok():
@@ -90,25 +94,28 @@ try:
                 # Convert tuple speed to list ✅
                 speed_list = list(speed)
 
+                # Obter timestamp em formato ISO 8601 ✅
+                timestamp_str = strftime("%Y-%m-%d %H:%M:%S", localtime(current_time))
+
                 # Criar o payload JSON corretamente ✅
                 payload = {
-                    "timestamp": current_time,  # Save the time in normal format
+                    "timestamp": timestamp_str,  # Use full date-time format
                     "left": left,
                     "center": center,
                     "right": right,
-                    "accel_x": accel_data[0],
-                    "accel_y": accel_data[1],
-                    "accel_z": accel_data[2],
-                    "gyro_x": gyro_data[0],
-                    "gyro_y": gyro_data[1],
-                    "gyro_z": gyro_data[2],
+                    "accel_x": round(accel_data[0], 4),  # Ensure float precision
+                    "accel_y": round(accel_data[1], 4),
+                    "accel_z": round(accel_data[2], 4),
+                    "gyro_x": round(gyro_data[0], 4),
+                    "gyro_y": round(gyro_data[1], 4),
+                    "gyro_z": round(gyro_data[2], 4),
                     "speed": speed_list,  # ✅ Now it's a valid JSON list
-                    "pose_x": pose[0],
-                    "pose_y": pose[1],
-                    "pose_theta": pose[2],
-                    "yaw": yaw,
-                    "pitch": pitch,
-                    "roll": roll
+                    "pose_x": round(pose[0], 4),
+                    "pose_y": round(pose[1], 4),
+                    "pose_theta": round(pose[2], 4),
+                    "yaw": round(yaw, 4),
+                    "pitch": round(pitch, 4),
+                    "roll": round(roll, 4)
                 }
 
                 # Converter para JSON
